@@ -37,6 +37,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		RepoURL     string `json:"repo_url"`
+		LocalPath   string `json:"local_path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -46,12 +47,17 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
+	if body.LocalPath == "" {
+		writeError(w, http.StatusBadRequest, "local_path is required")
+		return
+	}
 
 	project, err := h.db.CreateProject(r.Context(), db.CreateProjectParams{
 		OwnerID:     db.DefaultUserID,
 		Name:        body.Name,
 		Description: body.Description,
 		RepoUrl:     body.RepoURL,
+		LocalPath:   body.LocalPath,
 		Status:      "active",
 	})
 	if err != nil {
@@ -93,6 +99,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Name        *string `json:"name"`
 		Description *string `json:"description"`
 		RepoURL     *string `json:"repo_url"`
+		LocalPath   *string `json:"local_path"`
 		Status      *string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -109,6 +116,9 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.RepoURL != nil {
 		params.RepoUrl = sql.NullString{String: *body.RepoURL, Valid: true}
+	}
+	if body.LocalPath != nil {
+		params.LocalPath = sql.NullString{String: *body.LocalPath, Valid: true}
 	}
 	if body.Status != nil {
 		params.Status = sql.NullString{String: *body.Status, Valid: true}

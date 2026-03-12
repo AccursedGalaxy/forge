@@ -48,9 +48,14 @@ func (s *Summarizer) BuildContextPrompt(ctx context.Context, task db.Task, proje
 		}
 	}
 
-	userMsg := fmt.Sprintf(`You are preparing instructions for an AI coding agent.
-Given this task and context, write a clear, actionable prompt that the agent should follow.
-The prompt should be specific about what to do, reference relevant files/patterns from the context, and avoid ambiguity.
+	userMsg := fmt.Sprintf(`You are preparing a PLANNING prompt for an AI coding agent.
+The agent will run in READ-ONLY mode — it cannot create or modify files during planning.
+Its job is to explore the codebase and produce a detailed, numbered implementation plan.
+
+Given this task and context, write a prompt that instructs the agent to:
+1. Explore the project structure using Glob, Grep, Read, and Bash (for inspection only)
+2. Identify the exact files to create or modify and what changes are needed
+3. Output a clear, numbered implementation plan as text — NOT code, NOT file writes
 
 %s
 
@@ -209,6 +214,11 @@ func FallbackPlanStep(rawOutput string) []PlanStep {
 
 // basicPlanPrompt builds a simple prompt without LLM assistance.
 func basicPlanPrompt(task db.Task, project db.Project) string {
-	return fmt.Sprintf("Project: %s\n\nTask: %s\n\n%s",
-		project.Name, task.Title, task.Description)
+	return fmt.Sprintf(`You are in PLANNING MODE. You cannot write or modify files.
+Use Glob, Grep, Read, and Bash (read-only) to explore the project, then output a numbered implementation plan.
+Do NOT attempt to create files — describe what needs to be done instead.
+
+Project: %s
+Task: %s
+%s`, project.Name, task.Title, task.Description)
 }

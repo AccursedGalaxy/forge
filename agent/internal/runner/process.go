@@ -17,8 +17,11 @@ import (
 type SpawnOptions struct {
 	// SessionID is the Forge session ID (used for process tracking, not passed to claude).
 	SessionID string
-	// Prompt is the text prompt to pass to claude.
+	// Prompt is the text prompt to pass to claude via stdin.
 	Prompt string
+	// WorkDir is the working directory for the claude-cli process.
+	// Should be the project's local_path. Defaults to the current working directory if empty.
+	WorkDir string
 	// ClaudeResumeID is the claude session ID for --resume. Empty means new session.
 	ClaudeResumeID string
 	// AllowedTools is the list of allowed tool names for read-only planning sessions.
@@ -34,6 +37,9 @@ func spawn(ctx context.Context, binPath string, opts SpawnOptions) (*os.Process,
 	cmd := exec.CommandContext(ctx, binPath, args...)
 	cmd.Env = filteredEnv()
 	cmd.Stdin = bytes.NewBufferString(opts.Prompt)
+	if opts.WorkDir != "" {
+		cmd.Dir = opts.WorkDir
+	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

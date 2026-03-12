@@ -7,7 +7,7 @@ ENV_FILE="$(dirname "$0")/.smoke_env"
 echo "==> Creating project"
 PROJECT_JSON=$(curl -sf -X POST "$BASE/projects" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Smoke Test","description":"Backend smoke test","repo_url":"https://github.com/test/repo"}')
+  -d "{\"name\":\"Smoke Test\",\"description\":\"Backend smoke test\",\"repo_url\":\"https://github.com/test/repo\",\"local_path\":\"$HOME/Projects/smoke-test\"}")
 echo "$PROJECT_JSON" | jq .
 PROJECT_ID=$(echo "$PROJECT_JSON" | jq -r '.id')
 
