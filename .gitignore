@@ -11,6 +11,7 @@ logs/
 # Env files
 agent/.env
 .env
+.env.local
 
 # Frontend
 web/node_modules/
