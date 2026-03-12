@@ -1,5 +1,6 @@
 # Go
 agent/bin/
+agent/forge
 agent/internal/db/*.sql.go
 agent/internal/db/db.go
 agent/internal/db/models.go
@@ -9,10 +10,11 @@ agent/logs/
 logs/
 
 # Env files
-agent/.env
 .env
 .env.local
-.smoke_env
+**/.env
+**/.env.local
+**/.smoke_env
 
 # Frontend
 web/node_modules/
