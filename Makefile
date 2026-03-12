@@ -16,14 +16,7 @@ install:
 ## dev: Start backend + frontend concurrently (Ctrl-C stops both)
 dev:
 	@printf "$(CYAN)▶ starting FORGE dev servers…$(RESET)\n"
-	@( if command -v air &>/dev/null; then \
-	    cd agent && air; \
-	  else \
-	    cd agent && go run ./cmd/forge; \
-	  fi ) & API_PID=$$!; \
-	( cd web && bun run dev ) & WEB_PID=$$!; \
-	trap 'kill $$API_PID $$WEB_PID 2>/dev/null; wait $$API_PID $$WEB_PID 2>/dev/null' INT TERM; \
-	wait $$API_PID $$WEB_PID
+	@trap '' INT; bash scripts/dev.sh
 
 ## dev-api: Backend only (air hot-reload if installed, else go run)
 dev-api:
