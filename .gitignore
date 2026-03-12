@@ -1,0 +1,20 @@
+# Go
+agent/bin/
+agent/internal/db/*.sql.go
+agent/internal/db/db.go
+agent/internal/db/models.go
+
+# Logs (runtime, never commit)
+agent/logs/
+logs/
+
+# Env files
+agent/.env
+.env
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# OS
+.DS_Store
