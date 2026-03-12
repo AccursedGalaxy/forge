@@ -1,0 +1,75 @@
+:root {
+  /* Backgrounds */
+  --bg-base:     #111114;
+  --bg-surface:  #18181C;
+  --bg-elevated: #1E1E24;
+  --bg-overlay:  #24242C;
+
+  /* Borders */
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong:  rgba(255, 255, 255, 0.18);
+
+  /* Text */
+  --text-primary:   #F2F2F0;
+  --text-secondary: #A1A1AA;
+  --text-muted:     #71717A;
+  --text-disabled:  #3F3F46;
+
+  /* Accent */
+  --accent:       #A78BFA;
+  --accent-dim:   rgba(167, 139, 250, 0.15);
+  --accent-hover: #BBA4FB;
+
+  /* Status tokens */
+  --status-backlog:     #3F3F46;
+  --status-planned:     #1D4ED8;
+  --status-in-progress: #B45309;
+  --status-review:      #6D28D9;
+  --status-done:        #047857;
+  --status-backlog-text:     #A1A1AA;
+  --status-planned-text:     #93C5FD;
+  --status-in-progress-text: #FCD34D;
+  --status-review-text:      #C4B5FD;
+  --status-done-text:        #6EE7B7;
+
+  /* Autonomy tokens */
+  --autonomy-supervised:       #1E3A5F;
+  --autonomy-supervised-text:  #93C5FD;
+  --autonomy-checkpoint:       #3B1F5E;
+  --autonomy-checkpoint-text:  #C4B5FD;
+  --autonomy-autonomous:       #1A3D2E;
+  --autonomy-autonomous-text:  #6EE7B7;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+
+  /* Typography */
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-ui:      'Geist', system-ui, sans-serif;
+  --font-mono:    'Geist Mono', 'JetBrains Mono', monospace;
+
+  /* Layout */
+  --sidebar-width:        240px;
+  --sidebar-collapsed:    56px;
+  --topbar-height:        52px;
+  --session-panel-width:  420px;
+  --content-max-width:    1400px;
+
+  /* Border Radius */
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   10px;
+  --radius-full: 9999px;
+
+  /* Motion */
+  --duration-fast:    100ms;
+  --duration-default: 150ms;
+  --duration-slow:    250ms;
+  --duration-enter:   200ms;
+  --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out:     cubic-bezier(0, 0, 0.2, 1);
+}

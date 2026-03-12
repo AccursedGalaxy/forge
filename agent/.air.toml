@@ -1,0 +1,25 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/forge ./cmd/forge"
+  bin = "./tmp/forge"
+  full_bin = "./tmp/forge"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "bin", "internal/db/migrations"]
+  delay = 500
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = "1s"
+
+[log]
+  time = false
+
+[color]
+  main     = "magenta"
+  watcher  = "cyan"
+  build    = "yellow"
+  runner   = "green"
+
+[misc]
+  clean_on_exit = true
