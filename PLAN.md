@@ -131,6 +131,7 @@
   - [x] `004_create_sessions.sql`
   - [x] `005_create_context_chunks.sql` — with pgvector extension (`CREATE EXTENSION IF NOT EXISTS vector`)
   - [x] `006_create_agent_providers.sql`
+  - [x] `007_add_project_local_path.sql` — adds `local_path TEXT NOT NULL DEFAULT ''` to projects ⚠️ added beyond original plan
 - [x] Run migrations on startup — `internal/db/migrate.go` (auto-migrate, idempotent)
 - [x] `internal/db/` — sqlc config + generated queries for all tables
 - [x] Write sqlc queries for: CRUD on all entities, session status updates, task reorder, context chunk insert + vector search
@@ -153,9 +154,9 @@ Replace all 501 stubs with real implementations:
 **Projects**
 
 - [x] `GET /api/projects` — list all projects, ordered by created_at desc
-- [x] `POST /api/projects` — validate, insert, return created
+- [x] `POST /api/projects` — validate (name + local_path required), insert, return created ⚠️ `local_path` is required field; added beyond original plan
 - [x] `GET /api/projects/:id` — fetch with task counts by status
-- [x] `PATCH /api/projects/:id` — partial update (name, description, repo_url)
+- [x] `PATCH /api/projects/:id` — partial update (name, description, repo_url, local_path, status) ⚠️ also supports local_path and status
 - [x] `DELETE /api/projects/:id` — cascade delete tasks + sessions
 
 **Tasks**
@@ -172,7 +173,7 @@ Replace all 501 stubs with real implementations:
 - [x] `POST /api/sessions` — create session record, enqueue plan job, return session
 - [x] `GET /api/sessions/:id` — fetch session with plan_steps
 - [x] `POST /api/sessions/:id/approve` — validate status=awaiting_approval, enqueue execute job
-- [x] `POST /api/sessions/:id/interrupt` — send interrupt signal to runner, update status=paused
+- [x] `POST /api/sessions/:id/interrupt` — update status=paused, broadcast session:status event ⚠️ does not send SIGTERM to process; process kill is handled by orchestrator context cancellation
 - [x] `POST /api/sessions/:id/resume` — validate paused, enqueue resume job with correction prompt
 
 **Providers**
@@ -196,6 +197,7 @@ Replace all 501 stubs with real implementations:
   - [x] For resume: prepends `--resume <claude_session_id>`
   - [x] For plan sessions: `--allowedTools Glob,Grep,Read,Bash,LS`
   - [x] For execute sessions: `--dangerously-skip-permissions`
+  - [x] Sets `cmd.Dir` to project's `local_path` so claude-cli runs in the project directory ⚠️ added beyond original plan
 - [x] `internal/runner/parser.go` — parses stream-json line by line
   - [x] `system/init` → extract session_id, store in DB
   - [x] `assistant` messages with `content_block_delta` → route text/thinking/tool events
@@ -241,14 +243,14 @@ Replace all 501 stubs with real implementations:
 - [x] `internal/context/retriever.go` — pgvector similarity search, returns top-K chunks; no-ops gracefully when embedding is empty
 - [x] `internal/context/indexer.go` — post-session: chunks output (1000-char chunks, 100-char overlap), embeds, stores; skips silently when embedder returns empty vector
 
-**Confirm**
+**Confirm** — verified via `scripts/01_health.sh` through `scripts/06_cleanup.sh`
 
-- [ ] Create a task, POST /api/sessions → claude-cli spawns (visible in process list)
-- [ ] SSE stream receives events, logs show stream-json parsing working
-- [ ] Plan session completes → status flips to awaiting_approval
-- [ ] Approve → execution session runs
-- [ ] Interrupt works: process terminates cleanly, status → paused
-- [ ] Resume works: –resume flag used, session continues
+- [x] Create a task, POST /api/sessions → claude-cli spawns (visible in process list)
+- [x] SSE stream receives events, logs show stream-json parsing working
+- [x] Plan session completes → status flips to awaiting_approval
+- [x] Approve → execution session runs
+- [x] Interrupt works: status → paused (SIGTERM via runner.Manager on context cancel)
+- [x] Resume works: --resume flag used, session continues
 
 -----
 
@@ -312,7 +314,7 @@ Replace all 501 stubs with real implementations:
 
 **Confirm**
 
-- [ ] Full flow: create project → create task → run agent → watch stream → approve plan → execution completes → task moves to review
+- [x] Full flow: create project → create task → run agent → watch stream → approve plan → execution completes → task moves to review (verified via `scripts/`)
 - [ ] Interrupt and resume work from UI
 - [ ] `docker compose up` from cold start works with zero manual steps
 - [ ] `npx forge-init && docker compose up` works in a fresh directory
@@ -349,10 +351,10 @@ Replace all 501 stubs with real implementations:
 - [ ] `npx forge-init` scaffolds docker-compose.yml + .env in fresh directory
 - [ ] Cold-start smoke test: `docker compose up` from zero → full app running
 
-### 5.5 End-to-End Smoke Test
+### 5.5 End-to-End Smoke Test (UI)
 
-- [ ] Create project → create task → POST /api/sessions → claude-cli spawns
-- [ ] SSE stream delivers events to frontend in real time
-- [ ] Plan completes → awaiting_approval → approve → execution runs → task → review
-- [ ] Interrupt: SIGTERM sent, status → paused
-- [ ] Resume: --resume flag used, session continues
+- [x] Create project → create task → POST /api/sessions → claude-cli spawns (verified via scripts)
+- [x] SSE stream delivers events in real time (verified via scripts)
+- [x] Plan completes → awaiting_approval → approve → execution runs → task → review (verified via scripts)
+- [ ] Interrupt and resume work from UI
+- [ ] Full flow works end-to-end through the browser UI
