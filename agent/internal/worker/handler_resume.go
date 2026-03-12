@@ -7,17 +7,13 @@ import (
 	"log/slog"
 
 	"github.com/hibiken/asynq"
-	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/accursedgalaxy/forge/internal/db"
-	"github.com/accursedgalaxy/forge/internal/stream"
+	"github.com/accursedgalaxy/forge/internal/orchestrator"
 )
 
 // resumeSessionHandler processes TypeResumeSession jobs.
 type resumeSessionHandler struct {
-	queries     *db.Queries
-	pool        *pgxpool.Pool
-	broadcaster *stream.Broadcaster
+	orch *orchestrator.Orchestrator
 }
 
 func (h *resumeSessionHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
@@ -28,21 +24,9 @@ func (h *resumeSessionHandler) ProcessTask(ctx context.Context, t *asynq.Task) e
 
 	slog.Info("job received: session:resume", "session_id", payload.SessionID)
 
-	// Update session status to running
-	_, err := h.queries.UpdateSessionStatus(ctx, db.UpdateSessionStatusParams{
-		ID:     payload.SessionID,
-		Status: "running",
-	})
-	if err != nil {
-		slog.Error("worker: update resume session status failed", "session_id", payload.SessionID, "err", err)
+	if err := h.orch.ResumeSession(ctx, payload.SessionID, payload.CorrectionPrompt); err != nil {
+		slog.Error("worker: ResumeSession failed", "session_id", payload.SessionID, "err", err)
 		return err
 	}
-
-	_ = h.broadcaster.Publish(ctx, payload.SessionID.String(), "session:status", map[string]string{
-		"status": "running",
-	})
-
-	// TODO(Step 3): resume claude-cli agent
-	slog.Info("agent resume pending Step 3", "session_id", payload.SessionID)
 	return nil
 }

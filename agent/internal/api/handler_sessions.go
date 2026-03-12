@@ -42,7 +42,7 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessions)
 }
 
-// Create inserts a new session and enqueues a run job.
+// Create inserts a new session and enqueues a plan job.
 func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		TaskID      string `json:"task_id"`
@@ -80,7 +80,7 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := worker.NewRunSessionTask(worker.RunSessionPayload{
+	task, err := worker.NewPlanSessionTask(worker.PlanSessionPayload{
 		SessionID: session.ID,
 		TaskID:    session.TaskID,
 		ProjectID: session.ProjectID,
@@ -148,7 +148,8 @@ func (h *SessionHandler) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := worker.NewRunSessionTask(worker.RunSessionPayload{
+	// Enqueue TypeExecuteSession (not TypePlanSession).
+	task, err := worker.NewExecuteSessionTask(worker.ExecuteSessionPayload{
 		SessionID: session.ID,
 		TaskID:    session.TaskID,
 		ProjectID: session.ProjectID,
@@ -193,13 +194,19 @@ func (h *SessionHandler) Interrupt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
-// Resume re-enqueues a paused session.
+// Resume re-enqueues a paused session with an optional correction prompt.
 func (h *SessionHandler) Resume(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid session id")
 		return
 	}
+
+	var body struct {
+		Prompt string `json:"prompt"`
+	}
+	// Ignore decode errors — prompt is optional.
+	_ = json.NewDecoder(r.Body).Decode(&body)
 
 	session, err := h.db.GetSession(r.Context(), id)
 	if err == sql.ErrNoRows {
@@ -216,7 +223,8 @@ func (h *SessionHandler) Resume(w http.ResponseWriter, r *http.Request) {
 	}
 
 	task, err := worker.NewResumeSessionTask(worker.ResumeSessionPayload{
-		SessionID: session.ID,
+		SessionID:        session.ID,
+		CorrectionPrompt: body.Prompt,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create job")

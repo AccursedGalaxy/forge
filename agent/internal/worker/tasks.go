@@ -9,12 +9,20 @@ import (
 )
 
 const (
-	TypeRunSession    = "session:run"
-	TypeResumeSession = "session:resume"
+	TypePlanSession    = "session:plan"    // enqueued by POST /api/sessions
+	TypeExecuteSession = "session:execute" // enqueued by POST /api/sessions/:id/approve
+	TypeResumeSession  = "session:resume"  // enqueued by POST /api/sessions/:id/resume
 )
 
-// RunSessionPayload is the payload for a TypeRunSession job.
-type RunSessionPayload struct {
+// PlanSessionPayload is the payload for a TypePlanSession job.
+type PlanSessionPayload struct {
+	SessionID uuid.UUID `json:"session_id"`
+	TaskID    uuid.UUID `json:"task_id"`
+	ProjectID uuid.UUID `json:"project_id"`
+}
+
+// ExecuteSessionPayload is the payload for a TypeExecuteSession job.
+type ExecuteSessionPayload struct {
 	SessionID uuid.UUID `json:"session_id"`
 	TaskID    uuid.UUID `json:"task_id"`
 	ProjectID uuid.UUID `json:"project_id"`
@@ -22,16 +30,26 @@ type RunSessionPayload struct {
 
 // ResumeSessionPayload is the payload for a TypeResumeSession job.
 type ResumeSessionPayload struct {
-	SessionID uuid.UUID `json:"session_id"`
+	SessionID        uuid.UUID `json:"session_id"`
+	CorrectionPrompt string    `json:"correction_prompt"`
 }
 
-// NewRunSessionTask creates an asynq task for running a new session.
-func NewRunSessionTask(payload RunSessionPayload) (*asynq.Task, error) {
+// NewPlanSessionTask creates an asynq task for the planning phase.
+func NewPlanSessionTask(payload PlanSessionPayload) (*asynq.Task, error) {
 	b, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("worker: marshal run session payload: %w", err)
+		return nil, fmt.Errorf("worker: marshal plan session payload: %w", err)
 	}
-	return asynq.NewTask(TypeRunSession, b), nil
+	return asynq.NewTask(TypePlanSession, b), nil
+}
+
+// NewExecuteSessionTask creates an asynq task for the execution phase.
+func NewExecuteSessionTask(payload ExecuteSessionPayload) (*asynq.Task, error) {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("worker: marshal execute session payload: %w", err)
+	}
+	return asynq.NewTask(TypeExecuteSession, b), nil
 }
 
 // NewResumeSessionTask creates an asynq task for resuming a paused session.

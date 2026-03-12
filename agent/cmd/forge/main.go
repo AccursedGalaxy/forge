@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"io"
 	"log/slog"
 	"net/http"
@@ -17,11 +18,15 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/accursedgalaxy/forge/internal/api"
+	appcontext "github.com/accursedgalaxy/forge/internal/context"
 	"github.com/accursedgalaxy/forge/internal/config"
 	"github.com/accursedgalaxy/forge/internal/db"
+	"github.com/accursedgalaxy/forge/internal/llm"
 	"github.com/accursedgalaxy/forge/internal/logs"
+	"github.com/accursedgalaxy/forge/internal/orchestrator"
 	"github.com/accursedgalaxy/forge/internal/provider"
 	claudeprovider "github.com/accursedgalaxy/forge/internal/provider/claude"
+	"github.com/accursedgalaxy/forge/internal/runner"
 	"github.com/accursedgalaxy/forge/internal/stream"
 	"github.com/accursedgalaxy/forge/internal/worker"
 )
@@ -69,6 +74,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// ── Orphan cleanup ───────────────────────────────────────────────────────
+	// Mark sessions that were left in transient states by a previous crash as error.
+	cleanupOrphanSessions(ctx, sqlDB)
+
 	// ── Redis ────────────────────────────────────────────────────────────────
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
@@ -92,10 +101,25 @@ func main() {
 	// ── SSE broadcaster (Redis pub/sub) ──────────────────────────────────────
 	broadcaster := stream.NewBroadcaster(redisClient)
 
+	// ── LLM client and services ──────────────────────────────────────────────
+	llmClient := llm.NewClient(cfg.AnthropicAPIKey)
+	summarizer := llm.NewSummarizer(llmClient)
+	embedder := llm.NewEmbedder(llmClient)
+
+	// ── Context retrieval and indexing ───────────────────────────────────────
+	retriever := appcontext.NewRetriever(queries)
+	indexer := appcontext.NewIndexer(queries, embedder)
+
+	// ── Runner manager ───────────────────────────────────────────────────────
+	mgr := runner.NewManager("") // resolves "claude" from PATH
+
+	// ── Orchestrator ─────────────────────────────────────────────────────────
+	orch := orchestrator.New(queries, broadcaster, mgr, summarizer, retriever, indexer)
+
 	// ── Worker server ────────────────────────────────────────────────────────
 	workerServer := worker.New(asynqRedis)
 	workerMux := asynq.NewServeMux()
-	worker.RegisterHandlers(workerMux, queries, pool, broadcaster)
+	worker.RegisterHandlers(workerMux, orch)
 
 	go func() {
 		if err := workerServer.Start(workerMux); err != nil {
@@ -155,6 +179,24 @@ func main() {
 	}
 
 	slog.Info("server stopped cleanly")
+}
+
+// cleanupOrphanSessions marks sessions that were left in transient states
+// (planning, running, approved) by a previous server crash as error.
+func cleanupOrphanSessions(ctx context.Context, sqlDB *sql.DB) {
+	result, err := sqlDB.ExecContext(ctx,
+		`UPDATE sessions
+		 SET status = 'error', error = 'server restart', updated_at = NOW()
+		 WHERE status IN ('planning', 'running', 'approved')`)
+	if err != nil {
+		slog.Warn("cleanup: orphan session cleanup failed", "err", err)
+		return
+	}
+
+	n, _ := result.RowsAffected()
+	if n > 0 {
+		slog.Info("cleanup: marked orphaned sessions as error", "count", n)
+	}
 }
 
 // setupLogger configures the global slog logger.

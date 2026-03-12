@@ -3,8 +3,11 @@ package worker
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/hibiken/asynq"
+
+	"github.com/accursedgalaxy/forge/internal/orchestrator"
 )
 
 // Server wraps an asynq.Server with a simple Start/Stop API.
@@ -13,10 +16,12 @@ type Server struct {
 }
 
 // New creates a Worker Server connected to Redis at the given address.
+// ShutdownTimeout is set to 5 minutes to allow long-running sessions to complete gracefully.
 func New(redisOpt asynq.RedisClientOpt) *Server {
 	srv := asynq.NewServer(redisOpt, asynq.Config{
-		Concurrency: 10,
-		Logger:      &asynqLogger{},
+		Concurrency:     10,
+		ShutdownTimeout: 5 * time.Minute,
+		Logger:          &asynqLogger{},
 	})
 	return &Server{srv: srv}
 }
@@ -31,6 +36,17 @@ func (s *Server) Start(mux *asynq.ServeMux) error {
 func (s *Server) Stop() {
 	slog.Info("worker: stopping")
 	s.srv.Shutdown()
+}
+
+// RegisterHandlers wires all worker task handlers into the asynq mux.
+func RegisterHandlers(mux *asynq.ServeMux, orch *orchestrator.Orchestrator) {
+	plan := &planSessionHandler{orch: orch}
+	execute := &executeSessionHandler{orch: orch}
+	resume := &resumeSessionHandler{orch: orch}
+
+	mux.HandleFunc(TypePlanSession, plan.ProcessTask)
+	mux.HandleFunc(TypeExecuteSession, execute.ProcessTask)
+	mux.HandleFunc(TypeResumeSession, resume.ProcessTask)
 }
 
 // asynqLogger adapts asynq's logger interface to slog.

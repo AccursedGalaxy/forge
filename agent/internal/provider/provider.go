@@ -24,6 +24,7 @@ type RunOptions struct {
 type EventType string
 
 const (
+	EventTypeSystem   EventType = "system" // internal: session init metadata
 	EventTypeText     EventType = "text"
 	EventTypeThinking EventType = "thinking"
 	EventTypeTool     EventType = "tool"

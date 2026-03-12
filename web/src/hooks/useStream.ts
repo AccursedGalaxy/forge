@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import type { SessionStatus, StreamLine, StreamLineType } from '../types'
-import { createSSEClient } from '../lib/sse'
+import type { SessionStatus, StreamLine, StreamLineType, PlanStep } from '../types'
+import { createSSEClient, type ClaudeStreamData, type ClaudeDoneData } from '../lib/sse'
 import log from '../lib/logger'
 
 let lineIdCounter = 0
 
-function classifyLine(text: string): StreamLineType {
-  if (text.startsWith('⚡') || text.includes('[tool]') || text.includes('Tool:')) return 'tool'
-  if (text.startsWith('💭') || text.includes('[thinking]')) return 'thinking'
-  if (text.startsWith('✗') || text.toLowerCase().startsWith('error')) return 'error'
-  if (text.startsWith('✓') || text.toLowerCase().startsWith('success')) return 'success'
-  return 'default'
+function classifyStreamData(data: ClaudeStreamData): StreamLineType {
+  switch (data.type) {
+    case 'tool': return 'tool'
+    case 'thinking': return 'thinking'
+    case 'error': return 'error'
+    default: return 'default'
+  }
 }
 
 interface UseStreamResult {
@@ -18,12 +19,18 @@ interface UseStreamResult {
   isConnected: boolean
   isRunning: boolean
   status: SessionStatus | null
+  phase: string | null
+  planSteps: PlanStep[]
+  notes: string | null
 }
 
 export function useStream(sessionId: string | null): UseStreamResult {
   const [lines, setLines] = useState<StreamLine[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [status, setStatus] = useState<SessionStatus | null>(null)
+  const [phase, setPhase] = useState<string | null>(null)
+  const [planSteps, setPlanSteps] = useState<PlanStep[]>([])
+  const [notes, setNotes] = useState<string | null>(null)
   const clientRef = useRef<ReturnType<typeof createSSEClient> | null>(null)
 
   useEffect(() => {
@@ -31,17 +38,20 @@ export function useStream(sessionId: string | null): UseStreamResult {
       setLines([])
       setIsConnected(false)
       setStatus(null)
+      setPhase(null)
+      setPlanSteps([])
+      setNotes(null)
       return
     }
 
     log.info('useStream', 'Connecting to session stream', { sessionId })
 
-    const addLine = (text: string) => {
+    const addLine = (text: string, type: StreamLineType = 'default') => {
       setLines((prev) => [
         ...prev,
         {
           id: String(++lineIdCounter),
-          type: classifyLine(text),
+          type,
           text,
           timestamp: Date.now(),
         },
@@ -49,19 +59,33 @@ export function useStream(sessionId: string | null): UseStreamResult {
     }
 
     const client = createSSEClient(sessionId, {
-      onStart: (data) => {
+      onStart: (p) => {
         setIsConnected(true)
-        addLine(data)
+        setPhase(p)
+        addLine(`▶ Starting ${p} phase…`, 'success')
       },
-      onStream: (data) => addLine(data),
-      onDone: (data) => {
-        addLine(data)
-        setIsConnected(false)
+      onStream: (data: ClaudeStreamData) => {
+        if (data.content) {
+          addLine(data.content, classifyStreamData(data))
+        }
       },
-      onError: (data) => {
-        addLine(`✗ ${data}`)
+      onDone: (data: ClaudeDoneData) => {
         setIsConnected(false)
-        log.error('useStream', 'Stream error', { data })
+        setPhase(data.phase)
+        if (data.plan_steps && data.plan_steps.length > 0) {
+          setPlanSteps(data.plan_steps)
+        }
+        if (data.notes) {
+          setNotes(data.notes)
+          addLine(`✓ ${data.notes}`, 'success')
+        } else {
+          addLine(`✓ ${data.phase} phase complete`, 'success')
+        }
+      },
+      onError: (msg) => {
+        addLine(`✗ ${msg}`, 'error')
+        setIsConnected(false)
+        log.error('useStream', 'Stream error', { msg })
       },
       onStatusChange: (s) => setStatus(s),
     })
@@ -78,5 +102,5 @@ export function useStream(sessionId: string | null): UseStreamResult {
 
   const isRunning = status === 'running' || status === 'planning'
 
-  return { lines, isConnected, isRunning, status }
+  return { lines, isConnected, isRunning, status, phase, planSteps, notes }
 }

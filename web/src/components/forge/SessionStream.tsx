@@ -1,6 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
-import type { StreamLine } from '../../types'
+import type { StreamLine, SessionStatus, PlanStep } from '../../types'
 import { Button } from '../ui'
+import { PlanApprovalPanel } from './PlanApprovalPanel'
 
 interface SessionStreamProps {
   sessionId: string | null
@@ -9,7 +10,14 @@ interface SessionStreamProps {
   taskTitle: string
   lines: StreamLine[]
   isRunning: boolean
+  status: SessionStatus | null
+  phase: string | null
+  planSteps: PlanStep[]
+  notes: string | null
+  isApproving: boolean
   onInterrupt: () => void
+  onApprove: () => void
+  onReject: () => void
 }
 
 const slideKeyframes = `
@@ -34,6 +42,12 @@ const lineColors: Record<StreamLine['type'], string> = {
   success: '#22c55e',
 }
 
+const phaseLabels: Record<string, string> = {
+  plan: 'Planning',
+  execute: 'Executing',
+  resume: 'Resuming',
+}
+
 export function SessionStream({
   sessionId,
   isOpen,
@@ -41,7 +55,14 @@ export function SessionStream({
   taskTitle,
   lines,
   isRunning,
+  status,
+  phase,
+  planSteps,
+  notes: _notes,
+  isApproving,
   onInterrupt,
+  onApprove,
+  onReject,
 }: SessionStreamProps) {
   const streamRef = useRef<HTMLDivElement>(null)
 
@@ -88,6 +109,21 @@ export function SessionStream({
     marginRight: '8px',
   }
 
+  const phaseChipStyle: CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '10px',
+    fontWeight: 600,
+    color: isRunning ? 'var(--accent)' : 'var(--text-muted)',
+    background: isRunning ? 'var(--accent-dim)' : 'var(--bg-surface)',
+    border: `1px solid ${isRunning ? 'rgba(167,139,250,0.3)' : 'var(--border-subtle)'}`,
+    borderRadius: '999px',
+    padding: '2px 8px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    marginRight: '8px',
+    flexShrink: 0,
+  }
+
   const closeButtonStyle: CSSProperties = {
     background: 'none',
     border: 'none',
@@ -130,10 +166,14 @@ export function SessionStream({
     flexShrink: 0,
   }
 
+  const showApproval = status === 'awaiting_approval' && planSteps.length > 0
+  const phaseLabel = phase ? (phaseLabels[phase] ?? phase) : (status ?? '')
+
   return (
     <div style={panelStyle} aria-hidden={!isOpen}>
       <div style={headerStyle}>
         <span style={titleStyle}>{taskTitle || 'Session'}</span>
+        {phaseLabel && <span style={phaseChipStyle}>{phaseLabel}</span>}
         <button style={closeButtonStyle} onClick={onClose} aria-label="Close session panel">
           ✕
         </button>
@@ -161,7 +201,16 @@ export function SessionStream({
         )}
       </div>
 
-      {isRunning && (
+      {showApproval && (
+        <PlanApprovalPanel
+          planSteps={planSteps}
+          isApproving={isApproving}
+          onApprove={onApprove}
+          onReject={onReject}
+        />
+      )}
+
+      {isRunning && !showApproval && (
         <div style={footerStyle}>
           <Button variant="danger" size="sm" onClick={onInterrupt}>
             Interrupt
