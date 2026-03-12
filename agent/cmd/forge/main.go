@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -145,15 +146,23 @@ func main() {
 		LogBroadcaster: logBroadcaster,
 	})
 
+	// ── Graceful shutdown ────────────────────────────────────────────────────
+	// serverCtx is the base context for all HTTP requests. Cancelling it
+	// closes active SSE streams so srv.Shutdown can complete without timeout.
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
+
 	srv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
+		Addr:    ":" + cfg.Port,
+		Handler: router,
+		BaseContext: func(_ net.Listener) context.Context {
+			return serverCtx
+		},
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 0, // no timeout for SSE streams
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// ── Graceful shutdown ────────────────────────────────────────────────────
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -170,6 +179,9 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	// Cancel all SSE/stream handler contexts before draining the server.
+	serverCancel()
 
 	workerServer.Stop()
 

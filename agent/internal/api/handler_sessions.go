@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -14,6 +15,55 @@ import (
 	"github.com/accursedgalaxy/forge/internal/stream"
 	"github.com/accursedgalaxy/forge/internal/worker"
 )
+
+// sessionResponse is a clean JSON representation of a db.Session,
+// mapping nullable DB fields to proper JSON null instead of Go struct wrappers.
+type sessionResponse struct {
+	ID              uuid.UUID        `json:"id"`
+	TaskID          uuid.UUID        `json:"task_id"`
+	ProjectID       uuid.UUID        `json:"project_id"`
+	SessionType     string           `json:"session_type"`
+	Status          string           `json:"status"`
+	ClaudeSessionID *string          `json:"claude_session_id"`
+	PlanSteps       json.RawMessage  `json:"plan_steps"`
+	Error           *string          `json:"error"`
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
+	CompletedAt     *time.Time       `json:"completed_at"`
+}
+
+func toSessionResponse(s db.Session) sessionResponse {
+	r := sessionResponse{
+		ID:          s.ID,
+		TaskID:      s.TaskID,
+		ProjectID:   s.ProjectID,
+		SessionType: s.SessionType,
+		Status:      s.Status,
+		CreatedAt:   s.CreatedAt,
+		UpdatedAt:   s.UpdatedAt,
+	}
+	if s.ClaudeSessionID.Valid {
+		r.ClaudeSessionID = &s.ClaudeSessionID.String
+	}
+	if s.PlanSteps.Valid {
+		r.PlanSteps = s.PlanSteps.RawMessage
+	}
+	if s.Error.Valid {
+		r.Error = &s.Error.String
+	}
+	if s.CompletedAt.Valid {
+		r.CompletedAt = &s.CompletedAt.Time
+	}
+	return r
+}
+
+func toSessionResponses(sessions []db.Session) []sessionResponse {
+	out := make([]sessionResponse, len(sessions))
+	for i, s := range sessions {
+		out[i] = toSessionResponse(s)
+	}
+	return out
+}
 
 // SessionHandler handles session lifecycle endpoints.
 type SessionHandler struct {
@@ -39,7 +89,7 @@ func (h *SessionHandler) List(w http.ResponseWriter, r *http.Request) {
 	if sessions == nil {
 		sessions = []db.Session{}
 	}
-	writeJSON(w, http.StatusOK, sessions)
+	writeJSON(w, http.StatusOK, toSessionResponses(sessions))
 }
 
 // Create inserts a new session and enqueues a plan job.
@@ -94,7 +144,7 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, session)
+	writeJSON(w, http.StatusCreated, toSessionResponse(session))
 }
 
 // Get returns a single session.
@@ -114,7 +164,7 @@ func (h *SessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get session")
 		return
 	}
-	writeJSON(w, http.StatusOK, session)
+	writeJSON(w, http.StatusOK, toSessionResponse(session))
 }
 
 // Approve validates a session is awaiting approval and enqueues the execute job.
@@ -163,7 +213,7 @@ func (h *SessionHandler) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, updated)
+	writeJSON(w, http.StatusOK, toSessionResponse(updated))
 }
 
 // Interrupt pauses a running session.
@@ -191,7 +241,7 @@ func (h *SessionHandler) Interrupt(w http.ResponseWriter, r *http.Request) {
 		"status": "paused",
 	})
 
-	writeJSON(w, http.StatusOK, updated)
+	writeJSON(w, http.StatusOK, toSessionResponse(updated))
 }
 
 // Resume re-enqueues a paused session with an optional correction prompt.
@@ -235,7 +285,7 @@ func (h *SessionHandler) Resume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, session)
+	writeJSON(w, http.StatusOK, toSessionResponse(session))
 }
 
 // Stream serves SSE events for a session.

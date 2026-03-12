@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -32,13 +33,15 @@ func spawn(ctx context.Context, binPath string, opts SpawnOptions) (*os.Process,
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
 	cmd.Env = filteredEnv()
+	cmd.Stdin = bytes.NewBufferString(opts.Prompt)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, nil, fmt.Errorf("runner: stdout pipe: %w", err)
 	}
-	// Discard stderr to avoid polluting logs; slog captures everything we need.
-	cmd.Stderr = nil
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
 
 	if err := cmd.Start(); err != nil {
 		return nil, nil, fmt.Errorf("runner: start claude-cli: %w", err)
@@ -69,8 +72,11 @@ func spawn(ctx context.Context, binPath string, opts SpawnOptions) (*os.Process,
 			slog.Warn("runner: scanner error", "session_id", opts.SessionID, "err", err)
 		}
 
-		// Reap the process; ignore exit code (non-zero can be normal for claude).
+		// Reap the process; log any stderr output for debugging.
 		_ = cmd.Wait()
+		if stderrBuf.Len() > 0 {
+			slog.Warn("runner: claude stderr", "session_id", opts.SessionID, "stderr", stderrBuf.String())
+		}
 	}()
 
 	return cmd.Process, events, nil
@@ -95,9 +101,6 @@ func buildArgs(opts SpawnOptions) []string {
 	} else {
 		args = append(args, "--dangerously-skip-permissions")
 	}
-
-	// Prompt must be last — it is the positional argument.
-	args = append(args, opts.Prompt)
 
 	return args
 }
