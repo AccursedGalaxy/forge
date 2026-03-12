@@ -12,6 +12,7 @@ logs/
 agent/.env
 .env
 .env.local
+.smoke_env
 
 # Frontend
 web/node_modules/
